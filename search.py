@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import struct
@@ -23,6 +24,9 @@ freezes = {}
 freeze_lock = threading.Lock()
 freeze_stop = threading.Event()
 freeze_thread = None
+
+def clear():
+    os.system("clear")
 
 
 def load_json(path, default):
@@ -714,7 +718,7 @@ def auto_restore_or_activate(pine, data):
 
 def show_toggle_patches(pine, data):
     patches = data.get("patches", [])
-
+    
     print()
     print("=" * 65)
     print("TOGGLE PATCHES")
@@ -765,6 +769,7 @@ def toggle_patch_menu(pine, data):
             item = data["patches"][n - 1]
 
             if toggle_patch_item(pine, item):
+                clear()
                 save_toggle_file(
                     current_toggle_identity,
                     data
@@ -2220,9 +2225,11 @@ def main():
     pine = Pine()
 
     print()
-    print("=" * 65)
-    print("PINE MEMORY SEARCH")
-    print("=" * 65)
+    print("=" * 33)
+    print(f"{BOLD}       PINE MEMORY SEARCH{RESET}")
+    print("=" * 33)
+    print("")
+    print(f"{BOLD}{pine.title()} {pine.serial()} {pine.crc()}{RESET}")
 
     while True:
 
@@ -2264,7 +2271,7 @@ def main():
         print('[T] Toggle patches')
         print('[c] Clear')
         print('[s] Save')
-        print('[q] Quit')
+        print('[x] Quit')
 
         choice = input(
             "> "
@@ -2294,7 +2301,7 @@ def main():
         elif choice == "s":
             save_current()
 
-        elif choice == "q":
+        elif choice == "x":
 
             print(
                 "Stopping freezes..."
