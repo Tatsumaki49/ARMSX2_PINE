@@ -2,9 +2,6 @@
 __pycache__/
 *.pyc
 
-# Local scanner data
-search_cache.json
-
 # Local file
 run.py
 garage_vehicle.py
