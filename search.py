@@ -1323,25 +1323,19 @@ SCAN_MODES = (
 )
 
 
-def choose_scan_type(default="dword"):
+def choose_scan_type(default="all"):
     print()
-    print("[1] byte")
-    print("[2] word")
-    print("[3] dword")
-    print("[4] qword")
-    print("[5] float")
-    print("[6] double")
+    print("[1] All / Unknown Type")
+    print("[2] byte")
+    print("[3] word")
+    print("[4] dword")
+    print("[5] qword")
+    print("[6] float")
+    print("[7] double")
     choice = input(f"Type [{default}]: ").strip().lower()
     if not choice:
         return default
-    return {
-        "1": "byte",
-        "2": "word",
-        "3": "dword",
-        "4": "qword",
-        "5": "float",
-        "6": "double",
-    }.get(choice, default)
+    return {"1":"all","2":"byte","3":"word","4":"dword","5":"qword","6":"float","7":"double"}.get(choice, default)
 
 
 def parse_scan_number(text, typ):
@@ -1352,7 +1346,7 @@ def parse_scan_number(text, typ):
 
 
 def get_scan_tolerance(typ):
-    if typ not in ("float", "double"):
+    if typ not in ("all", "float", "double"):
         return 0.0
     text = input("Float tolerance [0]: ").strip()
     try:
@@ -1479,34 +1473,48 @@ def find_value(pine):
     if not ranges:
         return
     typ = choose_scan_type()
-    text = input("\nFind exact value: ").strip()
-    try:
-        target = parse_scan_number(text, typ)
-    except Exception:
-        print("Invalid value.")
-        return
+    print()
+    text = input("Find exact value: ").strip()
+    if typ == "all":
+        try:
+            float(text)
+        except Exception:
+            print("Invalid value.")
+            return
+    else:
+        try:
+            target = parse_scan_number(text, typ)
+        except Exception:
+            print("Invalid value.")
+            return
     tolerance = get_scan_tolerance(typ)
     if tolerance is None:
         return
-
     results = []
-    print()
-    print(f"First scan: {typ} == {target}")
-    for name, start, end in ranges:
-        print(f"\n{name}\n0x{start:08X} - 0x{end:08X}")
-        scan_range(pine, start, end, typ, target, tolerance, results)
+    scan_types = SCAN_TYPES if typ == "all" else (typ,)
+    print(f"First scan: {typ} == {text}")
+    for scan_typ in scan_types:
+        try:
+            scan_target = parse_scan_number(text, scan_typ)
+        except Exception:
+            continue
         print()
-
+        print(f"Type: {scan_typ}")
+        for name, start, end in ranges:
+            print()
+            print(f"{name}")
+            print(f"0x{start:08X} - 0x{end:08X}")
+            scan_range(pine, start, end, scan_typ, scan_target, tolerance if scan_typ in ("float", "double") else 0.0, results)
     print(f"Found {len(results):,} results.")
-    cache = {
+    save_json(CACHE_FILE, {
         "scan_type": typ,
         "scan_mode": "exact",
-        "target": target,
+        "target": target if typ != "all" else text,
+        "target_text": text,
         "tolerance": tolerance,
         "ranges": [{"name": n, "start": s, "end": e} for n, s, e in ranges],
         "results": results,
-    }
-    save_json(CACHE_FILE, cache)
+    })
 
 
 def read_value(pine, addr, typ):
@@ -1559,8 +1567,8 @@ def run_next_scan(pine, mode=None):
     if not cache or not cache.get("results"):
         print("No current search. Use [f] first.")
         return
-    typ = cache.get("scan_type", "dword")
-    if typ not in SCAN_TYPES:
+    scan_typ = cache.get("scan_type", "dword")
+    if scan_typ != "all" and scan_typ not in SCAN_TYPES:
         print("Unsupported cached scan type.")
         return
     if mode is None:
@@ -1568,42 +1576,57 @@ def run_next_scan(pine, mode=None):
         if not mode:
             print("Invalid scan mode.")
             return
-
-    target = cache.get("target")
     tolerance = float(cache.get("tolerance", 0.0) or 0.0)
+    exact_text = None
+    exact_target = cache.get("target")
     if mode == "exact":
-        try:
-            target = parse_scan_number(input("Find exact value: ").strip(), typ)
-        except Exception:
+        exact_text = input("Find exact value: ").strip()
+        if not exact_text:
             print("Invalid value.")
             return
-        tolerance = get_scan_tolerance(typ)
+        if scan_typ == "all":
+            try:
+                float(exact_text)
+            except Exception:
+                print("Invalid value.")
+                return
+            tolerance = get_scan_tolerance("all")
+        else:
+            try:
+                exact_target = parse_scan_number(exact_text, scan_typ)
+            except Exception:
+                print("Invalid value.")
+                return
+            tolerance = get_scan_tolerance(scan_typ)
         if tolerance is None:
             return
-
-    old_results = cache["results"]
     new_results = []
-    print(f"\nNext scan: {mode} ({typ})")
-    for item in old_results:
+    print()
+    print(f"Next scan: {mode} ({scan_typ})")
+    for item in cache["results"]:
+        item_typ = item.get("type", scan_typ)
+        if item_typ not in SCAN_TYPES:
+            continue
         try:
-            current = read_value(pine, item["address"], typ)
+            current = read_value(pine, item["address"], item_typ)
         except Exception:
             continue
-        previous = item.get("value")
-        if previous is None:
-            previous = current
-        if not math.isfinite(current) if typ in ("float", "double") else False:
+        previous = item.get("value", current)
+        if item_typ in ("float", "double") and not math.isfinite(current):
             continue
-        if compare_scan(current, previous, mode, target, typ, tolerance):
-            new_results.append({
-                "address": item["address"],
-                "type": typ,
-                "value": current,
-                "previous": previous,
-            })
-
+        item_target = exact_target
+        item_tolerance = tolerance if item_typ in ("float", "double") else 0.0
+        if mode == "exact":
+            try:
+                item_target = parse_scan_number(exact_text, item_typ)
+            except Exception:
+                continue
+        if compare_scan(current, previous, mode, item_target, item_typ, item_tolerance):
+            new_results.append({"address": item["address"], "type": item_typ, "value": current, "previous": previous})
     cache["scan_mode"] = mode
-    cache["target"] = target
+    if mode == "exact":
+        cache["target"] = exact_target if scan_typ != "all" else exact_text
+        cache["target_text"] = exact_text
     cache["tolerance"] = tolerance
     cache["results"] = new_results
     save_json(CACHE_FILE, cache)
