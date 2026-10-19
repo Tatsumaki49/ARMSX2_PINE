@@ -1,0 +1,25 @@
+name: Run Scanner Helper v2
+
+on:
+  push:
+    branches:
+      - scanner-update-workflow
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/apply_scanner_update_v2.py
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --check
+          git add search.py web_gui.py
+          git rm -f .github/workflows/apply_all_type_scan.yml .github/workflows/run_scanner_helper.yml .github/workflows/run_scanner_helper_v2.yml tools/apply_scanner_update.py tools/apply_scanner_update_v2.py
+          git commit -m "Add All / Unknown Type scanner [skip ci]"
+          git push origin scanner-update-workflow
