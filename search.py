@@ -1369,7 +1369,6 @@ def pnach_make_toggle_item(pine, section):
 
     return {
         "name": section["name"],
-        "category": category,
         "enabled": False,
         "addresses": addresses,
     }
