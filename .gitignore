@@ -13,4 +13,4 @@ Toggle Patches/
 *.tmp
 *.log
 *.json
-
+*.bak

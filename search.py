@@ -718,7 +718,7 @@ def auto_restore_or_activate(pine, data):
 
 def show_toggle_patches(pine, data):
     patches = data.get("patches", [])
-    
+
     print()
     print("=" * 65)
     print("TOGGLE PATCHES")
@@ -726,6 +726,8 @@ def show_toggle_patches(pine, data):
 
     if not patches:
         print("No patches in this file.")
+        print("")
+        print("[x] Back")
         return
 
     for i, item in enumerate(patches, 1):
@@ -740,13 +742,6 @@ def show_toggle_patches(pine, data):
             f"{status_text(item.get('enabled'))} "
             f"({suffix})"
         )
-
-        for address in patch_addresses(item):
-            print(
-                f"    0x{address['address']:08X} "
-                f"{address['type']} "
-                f"-> {address['value']}"
-            )
 
     print()
     print("[x] Back")
