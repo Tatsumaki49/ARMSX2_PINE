@@ -415,14 +415,14 @@ def normalize_address(item):
     if not isinstance(item, dict):
         raise ValueError("Patch address entry must be an object")
 
-    item["address"] = int(item["address"])
+    item["address"] = parse_scan_number(item["address"], "qword")
     item["type"] = str(item.get("type", "dword")).lower()
     item["value"] = item.get("value", 0)
 
     if item["type"] in ("float", "double"):
         item["value"] = float(item["value"])
     else:
-        item["value"] = int(item["value"])
+        item["value"] = parse_scan_number(item["value"], item["type"])
 
     return item
 
@@ -1345,9 +1345,27 @@ def choose_scan_type(default="all"):
 
 def parse_scan_number(text, typ):
     text = str(text).strip()
+
     if typ in ("float", "double"):
         return float(text)
-    return int(text, 0)
+
+    base = 16 if text.lower().startswith("0x") else 10
+    value = int(text, base)
+
+    limits = {
+        "byte": (0, 0xFF),
+        "word": (0, 0xFFFF),
+        "dword": (0, 0xFFFFFFFF),
+        "qword": (0, 0xFFFFFFFFFFFFFFFF),
+    }
+
+    if typ in limits:
+        lo, hi = limits[typ]
+        if not lo <= value <= hi:
+            raise ValueError(f"{typ} value must be {lo}..{hi}.")
+
+    return value
+
 
 
 def get_scan_tolerance(typ):
