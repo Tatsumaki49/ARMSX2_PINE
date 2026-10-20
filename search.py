@@ -1345,37 +1345,7 @@ def pnach_select_sections(sections):
     return selected
 
 
-def pnach_category_choice(data):
-    ensure_categories()
-
-    print()
-    print("Category:")
-    print("[1] Uncategorized")
-    print("[2] Create new category")
-    print()
-
-    choice = input("> ").strip().lower()
-
-    if choice == "1" or not choice:
-        return "Uncategorized"
-
-    if choice == "2":
-        name = input("Category name: ").strip()
-        if not name:
-            print("Using Uncategorized.")
-            return "Uncategorized"
-        if name == "Uncategorized":
-            return "Uncategorized"
-        if name in data["categories"]:
-            return name
-        data["categories"].append(name)
-        return name
-
-    print("Invalid category. Using Uncategorized.")
-    return "Uncategorized"
-
-
-def pnach_make_toggle_item(pine, section, category):
+def pnach_make_toggle_item(pine, section):
     addresses = []
 
     for patch in section["patches"]:
@@ -1390,7 +1360,6 @@ def pnach_make_toggle_item(pine, section, category):
     if len(addresses) == 1:
         return {
             "name": section["name"],
-            "category": category,
             "address": addresses[0]["address"],
             "type": addresses[0]["type"],
             "value": addresses[0]["value"],
@@ -1432,7 +1401,6 @@ def import_pnach_to_toggle(pine, identity, data):
     if selected is None or not selected:
         return
 
-    category = pnach_category_choice(data)
     existing = {
         (str(item.get("name", "")), pnach_patch_signature(item))
         for item in data.get("patches", [])
@@ -1445,8 +1413,7 @@ def import_pnach_to_toggle(pine, identity, data):
         try:
             item = pnach_make_toggle_item(
                 pine,
-                section,
-                category
+                section
             )
             signature = (
                 str(item.get("name", "")),
