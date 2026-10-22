@@ -1896,6 +1896,32 @@ def run_next_scan(pine, mode=None):
                 continue
         if compare_scan(current, previous, mode, item_target, item_typ, item_tolerance):
             new_results.append({"address": item["address"], "type": item_typ, "value": current, "previous": previous})
+    previous_results = cache["results"]
+    previous_count = len(previous_results)
+    current_count = len(new_results)
+
+    if current_count == 0:
+        print()
+        print("No results found.")
+        print()
+        print(f"Previous scan: {previous_count:,} results")
+        print(f"Current scan: {current_count:,} results")
+        print()
+        print("[1] Restore previous scan")
+        print("[2] Clear search")
+        choice = input("> ").strip().lower()
+
+        if choice == "1":
+            print(f"Restored previous scan: {previous_count:,} results.")
+            show_results(previous_results)
+            return
+        elif choice == "2":
+            clear_current()
+            return
+        else:
+            print("Invalid option. Previous scan kept.")
+            return
+
     cache["scan_mode"] = mode
     if mode == "exact":
         cache["target"] = exact_target if scan_typ != "all" else exact_text
