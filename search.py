@@ -4,8 +4,10 @@ import json
 import struct
 import math
 import threading
+import time
 from pathlib import Path
 from pine_client import Pine
+from usage_logger import log_event, set_context, track_action, usage_logger_menu
 
 
 DEFAULT_START = 0x00600000
@@ -764,6 +766,12 @@ def toggle_patch_menu(pine, data):
             item = data["patches"][n - 1]
 
             if toggle_patch_item(pine, item):
+                log_event(
+                    "patch_toggled",
+                    name=patch_label(item),
+                    enabled=bool(item.get("enabled")),
+                    address_count=patch_address_count(item),
+                )
                 clear()
                 save_toggle_file(
                     current_toggle_identity,
@@ -1432,6 +1440,14 @@ def import_pnach_to_toggle(pine, identity, data):
     if skipped:
         print(f"Already existed: {skipped}")
     print("PNACH import complete.")
+    log_event(
+        "pnach_import",
+        status="completed",
+        file=path.name,
+        selected_sections=len(selected),
+        imported_count=imported,
+        skipped_count=skipped,
+    )
 
 current_toggle_identity = None
 
@@ -1742,6 +1758,7 @@ def scan_range(pine, start, end, typ, target, tolerance, results):
 
 
 def find_value(pine):
+    scan_started = time.perf_counter()
     ranges = choose_scan_ranges()
     if not ranges:
         return
@@ -1779,6 +1796,17 @@ def find_value(pine):
             print(f"0x{start:08X} - 0x{end:08X}")
             scan_range(pine, start, end, scan_typ, scan_target, tolerance if scan_typ in ("float", "double") else 0.0, results)
     print(f"Found {len(results):,} results.")
+    log_event(
+        "scan_completed",
+        action="first_scan",
+        mode="exact",
+        scan_type=typ,
+        input_value=text,
+        tolerance=tolerance,
+        ranges=[{"name": n, "start": f"0x{s:08X}", "end": f"0x{e:08X}"} for n, s, e in ranges],
+        result_count=len(results),
+        duration_ms=round((time.perf_counter() - scan_started) * 1000, 2),
+    )
     save_json(CACHE_FILE, {
         "scan_type": typ,
         "scan_mode": "exact",
@@ -1873,6 +1901,7 @@ def run_next_scan(pine, mode=None):
             tolerance = get_scan_tolerance(scan_typ)
         if tolerance is None:
             return
+    scan_started = time.perf_counter()
     new_results = []
     print()
     print(f"Next scan: {mode} ({scan_typ})")
@@ -1901,6 +1930,17 @@ def run_next_scan(pine, mode=None):
     current_count = len(new_results)
 
     if current_count == 0:
+        log_event(
+            "scan_completed",
+            action="next_scan",
+            mode=mode,
+            scan_type=scan_typ,
+            input_value=exact_text,
+            tolerance=tolerance,
+            previous_count=previous_count,
+            result_count=current_count,
+            duration_ms=round((time.perf_counter() - scan_started) * 1000, 2),
+        )
         print()
         print("No results found.")
         print()
@@ -1910,10 +1950,11 @@ def run_next_scan(pine, mode=None):
         print("[1] Restore previous scan")
         print("[2] Clear search")
         choice = input("> ").strip().lower()
+        log_event("zero_result_recovery", choice=choice, previous_count=previous_count)
 
         if choice == "1":
             print(f"Restored previous scan: {previous_count:,} results.")
-            show_results(previous_results)
+            show_results(previous_results, limit=50)
             return
         elif choice == "2":
             clear_current()
@@ -1922,6 +1963,17 @@ def run_next_scan(pine, mode=None):
             print("Invalid option. Previous scan kept.")
             return
 
+    log_event(
+        "scan_completed",
+        action="next_scan",
+        mode=mode,
+        scan_type=scan_typ,
+        input_value=exact_text,
+        tolerance=tolerance,
+        previous_count=previous_count,
+        result_count=current_count,
+        duration_ms=round((time.perf_counter() - scan_started) * 1000, 2),
+    )
     cache["scan_mode"] = mode
     if mode == "exact":
         cache["target"] = exact_target if scan_typ != "all" else exact_text
@@ -1955,20 +2007,24 @@ def next_scan(pine):
             print("Invalid option.")
 
 
-def show_results(results):
+def show_results(results, limit=None):
     if not results:
         print("No current addresses.")
         return
+    display_results = results[:limit] if limit is not None and len(results) > limit else results
     print()
     print("=" * 65)
     print("CURRENT ADDRESSES")
     print("=" * 65)
-    for i, item in enumerate(results, 1):
+    for i, item in enumerate(display_results, 1):
         previous = item.get("previous")
         if previous is None:
             print(f"[{i:5}] 0x{item['address']:08X} {item['type']:7} {item['value']}")
         else:
             print(f"[{i:5}] 0x{item['address']:08X} {item['type']:7} {previous} -> {item['value']}")
+    if len(display_results) < len(results):
+        print()
+        print(f"Showing {len(display_results):,} of {len(results):,} addresses.")
 
 
 # ==================== EDIT ====================
@@ -2523,7 +2579,11 @@ def main():
     print(f"{BOLD}       PINE MEMORY SEARCH{RESET}")
     print("=" * 33)
     print("")
-    print(f"{BOLD}{pine.title()} {pine.serial()} {pine.crc()}{RESET}")
+    game_title = str(pine.title())
+    game_serial = str(pine.serial())
+    game_crc = str(pine.crc())
+    set_context(game=game_title, serial=game_serial, crc=game_crc)
+    print(f"{BOLD}{game_title} {game_serial} {game_crc}{RESET}")
 
     while True:
 
@@ -2563,6 +2623,7 @@ def main():
         print('[a] Address table')
         print('[v] View freezes')
         print('[T] Toggle patches')
+        print('[U] Usage logger')
         print('[c] Clear')
         print('[s] Save')
         print('[x] Quit')
@@ -2572,28 +2633,39 @@ def main():
         ).strip().lower()
 
         if choice == "f":
-            find_value(pine)
+            with track_action("find_number"):
+                find_value(pine)
 
         elif choice == "n":
-            next_scan(pine)
+            with track_action("next_scan_menu"):
+                next_scan(pine)
 
         elif choice == "e":
-            edit(pine)
+            with track_action("edit"):
+                edit(pine)
 
         elif choice == "a":
-            address_table(pine)
+            with track_action("address_table"):
+                address_table(pine)
 
         elif choice == "v":
-            view_freezes(pine)
+            with track_action("view_freezes"):
+                view_freezes(pine)
 
         elif choice == "t":
-            toggle_patches(pine)
+            with track_action("toggle_patches"):
+                toggle_patches(pine)
+
+        elif choice == "u":
+            usage_logger_menu()
 
         elif choice == "c":
-            clear_current()
+            with track_action("clear_search"):
+                clear_current()
 
         elif choice == "s":
-            save_current()
+            with track_action("save_results"):
+                save_current()
 
         elif choice == "x":
 
