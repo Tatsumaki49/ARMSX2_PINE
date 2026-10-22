@@ -9,6 +9,9 @@ run.py
 # Toggle patch data
 Toggle Patches/
 
+# Local usage logs
+.usage/
+
 # Temporary files
 *.tmp
 *.log
