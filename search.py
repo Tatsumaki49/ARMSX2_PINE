@@ -1758,7 +1758,6 @@ def scan_range(pine, start, end, typ, target, tolerance, results):
 
 
 def find_value(pine):
-    scan_started = time.perf_counter()
     ranges = choose_scan_ranges()
     if not ranges:
         return
@@ -1780,6 +1779,7 @@ def find_value(pine):
     tolerance = get_scan_tolerance(typ)
     if tolerance is None:
         return
+    scan_started = time.perf_counter()
     results = []
     scan_types = SCAN_TYPES if typ == "all" else (typ,)
     print(f"First scan: {typ} == {text}")
