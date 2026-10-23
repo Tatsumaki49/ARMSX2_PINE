@@ -48,6 +48,12 @@ MSG_UUID = 0xD
 MSG_GAME_VERSION = 0xE
 MSG_STATUS = 0xF
 
+MsgGetStats = 0x10
+MsgGetSetting = 0x11
+MsgSetSetting = 0x12
+MsgFrameAdvance = 0x13
+MsgGSDump = 0x14
+MsgGetEffectiveSetting = 0x15
 
 # ---------------------------------------------------------------------------
 # ARMSX2-local PINE extensions
