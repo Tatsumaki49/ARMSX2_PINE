@@ -48,12 +48,12 @@ MSG_UUID = 0xD
 MSG_GAME_VERSION = 0xE
 MSG_STATUS = 0xF
 
-MsgGetStats = 0x10
-MsgGetSetting = 0x11
-MsgSetSetting = 0x12
-MsgFrameAdvance = 0x13
-MsgGSDump = 0x14
-MsgGetEffectiveSetting = 0x15
+MSG_GET_STATS = 0x10
+MSG_GET_SETTING = 0x11
+MSG_SET_SETTING = 0x12
+MSG_FRAME_ADVANCE = 0x13
+MSG_GS_DUMP = 0x14
+MSG_GET_EFFECTIVE_SETTING = 0x15
 
 # ---------------------------------------------------------------------------
 # ARMSX2-local PINE extensions
@@ -360,6 +360,67 @@ class Pine:
             "utf-8",
             "replace"
         )
+
+    def get_setting(self, section, key):
+        """Return a persisted setting as a string for the given section and key."""
+        if not isinstance(section, str) or not isinstance(key, str):
+            raise TypeError("section and key must be strings")
+
+        section_b = section.encode("utf-8")
+        key_b = key.encode("utf-8")
+        command = (
+            struct.pack("<BI", MSG_GET_SETTING, len(section_b))
+            + section_b
+            + struct.pack("<I", len(key_b))
+            + key_b
+        )
+        raw = self._send_batch([command])
+
+        if len(raw) < 4:
+            raise PineError("invalid get_setting response")
+
+        size = struct.unpack("<I", raw[:4])[0]
+        if size > len(raw) - 4:
+            raise PineError(f"invalid get_setting value size: {size}")
+
+        return raw[4:4 + size].split(b"\\x00", 1)[0].decode(
+            "utf-8", "replace"
+        )
+
+    def set_setting(self, section, key, value):
+        """Persist a setting and return the server's response dictionary."""
+        if not all(isinstance(item, str) for item in (section, key, value)):
+            raise TypeError("section, key, and value must be strings")
+
+        section_b = section.encode("utf-8")
+        key_b = key.encode("utf-8")
+        value_b = value.encode("utf-8")
+        command = (
+            struct.pack("<BI", MSG_SET_SETTING, len(section_b))
+            + section_b
+            + struct.pack("<I", len(key_b))
+            + key_b
+            + struct.pack("<I", len(value_b))
+            + value_b
+        )
+        raw = self._send_batch([command])
+
+        if len(raw) < 4:
+            raise PineError("invalid set_setting response")
+
+        size = struct.unpack("<I", raw[:4])[0]
+        if size > len(raw) - 4:
+            raise PineError(f"invalid set_setting response size: {size}")
+
+        payload = raw[4:4 + size].split(b"\\x00", 1)[0]
+        try:
+            result = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise PineError(f"invalid set_setting JSON response: {exc}") from exc
+
+        if not isinstance(result, dict):
+            raise PineError("invalid set_setting response: expected a JSON object")
+        return result
 
     def status(self):
         raw = self._send_batch([
