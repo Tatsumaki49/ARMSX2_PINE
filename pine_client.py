@@ -383,7 +383,7 @@ class Pine:
         if size > len(raw) - 4:
             raise PineError(f"invalid get_setting value size: {size}")
 
-        return raw[4:4 + size].split(b"\\x00", 1)[0].decode(
+        return raw[4:4 + size].split(b"\x00", 1)[0].decode(
             "utf-8", "replace"
         )
 
@@ -412,7 +412,7 @@ class Pine:
         if size > len(raw) - 4:
             raise PineError(f"invalid set_setting response size: {size}")
 
-        payload = raw[4:4 + size].split(b"\\x00", 1)[0]
+        payload = raw[4:4 + size].split(b"\x00", 1)[0]
         try:
             result = json.loads(payload.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
